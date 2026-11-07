@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import OrderCard from "@/components/OrderCard";
 import {
   ChefHat,
@@ -7,9 +8,10 @@ import {
   CheckCircle,
   Clock,
   RefreshCw,
-  Coffee,
   TrendingUp,
-  Bell,
+  Home,
+  Receipt,
+  Coffee,
 } from "lucide-react";
 
 export default function KasirPage() {
@@ -38,7 +40,7 @@ export default function KasirPage() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 10000); // Polling setiap 10 detik (lebih efisien)
+    const interval = setInterval(fetchOrders, 10000); // Polling setiap 10 detik
     return () => clearInterval(interval);
   }, []);
 
@@ -74,120 +76,150 @@ export default function KasirPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#faf8f5] relative">
-      {/* Premium Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/90 border-b border-zinc-200/60 supports-[backdrop-filter]:bg-white/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-zinc-900 rounded-xl flex items-center justify-center shadow-md">
-              <Coffee className="w-5 h-5 text-amber-500" />
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50 relative selection:bg-amber-200 selection:text-amber-900">
+      {/* Premium Header (Persis seperti Admin) */}
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-gradient-to-r from-amber-100/90 via-orange-100/90 to-amber-100/90 border-b border-amber-200/60 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            {/* Tombol Kembali ke Beranda (Subtle) */}
+            <Link
+              href="/"
+              className="p-2.5 text-zinc-400 hover:text-amber-700 hover:bg-amber-50 rounded-xl transition-all duration-200 active:scale-95"
+              title="Kembali ke Beranda"
+            >
+              <Home className="w-5 h-5" />
+            </Link>
+
+            {/* Logo Kedai Antasena */}
+            <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-amber-200 shadow-sm bg-white flex-shrink-0">
+              <img
+                src="/kedai-antasena.jpeg"
+                alt="Kedai Antasena"
+                className="w-full h-full object-cover"
+              />
             </div>
+
             <div>
-              <h1 className="font-bold text-zinc-900 text-lg tracking-tight leading-none">
+              <h1 className="font-bold text-zinc-900 text-2xl tracking-tight">
                 Dashboard Kasir
               </h1>
-              <p className="text-xs text-zinc-500 font-medium mt-0.5">
+              <p className="text-sm text-zinc-600 font-medium flex items-center gap-1.5">
+                <Clock className="w-4 h-4" />
                 {currentTime.toLocaleDateString("id-ID", {
                   weekday: "long",
-                  year: "numeric",
-                  month: "long",
                   day: "numeric",
+                  month: "long",
+                  year: "numeric",
                 })}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-xs font-medium text-zinc-600 bg-zinc-100/80 px-3 py-1.5 rounded-lg border border-zinc-200">
-              <Clock className="w-3.5 h-3.5" />
+            {/* Jam Digital */}
+            <div className="hidden sm:flex items-center gap-2 text-sm font-bold text-amber-800 bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
+              <Clock className="w-4 h-4" />
               {currentTime.toLocaleTimeString("id-ID", {
                 hour: "2-digit",
                 minute: "2-digit",
               })}
             </div>
+
+            {/* Tombol Refresh (Persis seperti Admin) */}
             <button
               onClick={fetchOrders}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-900 text-white text-sm font-semibold rounded-xl hover:bg-amber-700 transition-all duration-200 shadow-sm disabled:opacity-50"
+              className="p-3 bg-white border-2 border-amber-200 rounded-xl hover:bg-amber-50 hover:border-amber-300 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg group disabled:opacity-50"
+              title="Segarkan Data"
             >
               <RefreshCw
-                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+                className={`w-5 h-5 text-amber-700 group-hover:rotate-180 transition-transform duration-700 ${
+                  loading ? "animate-spin" : ""
+                }`}
               />
-              <span className="hidden sm:inline">Segarkan</span>
             </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {/* Stats Grid (Gradient Colorful seperti Admin) */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <StatCard
-            title="Diterima"
+            title="Baru Masuk"
             value={stats.received}
             icon={Clock}
             color="blue"
+            gradient="from-blue-500 to-blue-600"
           />
           <StatCard
-            title="Disiapkan"
+            title="Sedang Dibuat"
             value={stats.preparing}
             icon={ChefHat}
             color="orange"
+            gradient="from-orange-500 to-orange-600"
           />
           <StatCard
             title="Siap Saji"
             value={stats.ready}
             icon={Package}
             color="emerald"
+            gradient="from-emerald-500 to-emerald-600"
           />
           <StatCard
             title="Total Order"
             value={stats.totalToday}
             icon={TrendingUp}
-            color="zinc"
+            color="amber"
+            gradient="from-amber-500 to-orange-600"
           />
         </div>
 
-        {/* Modern Filter Tabs (Segmented Control) */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-            {[
-              { key: "active", label: "Pesanan Aktif" },
-              { key: "received", label: "Baru Masuk" },
-              { key: "preparing", label: "Sedang Dibuat" },
-              { key: "ready", label: "Siap Diantar" },
-              { key: "completed", label: "Selesai" },
-              { key: "all", label: "Semua" },
-            ].map((f) => (
+        {/* Modern Filter Tabs (Persis seperti Admin) */}
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-6">
+          {[
+            { key: "active", label: "Pesanan Aktif", icon: Receipt },
+            { key: "received", label: "Baru Masuk", icon: Clock },
+            { key: "preparing", label: "Sedang Dibuat", icon: ChefHat },
+            { key: "ready", label: "Siap Saji", icon: Package },
+            { key: "completed", label: "Selesai", icon: CheckCircle },
+            { key: "all", label: "Semua", icon: TrendingUp },
+          ].map((f) => {
+            const Icon = f.icon;
+            return (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-200 ${
+                className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 active:scale-95 ${
                   filter === f.key
-                    ? "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20"
-                    : "bg-white text-zinc-600 border border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50"
+                    ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30"
+                    : "text-zinc-600 hover:bg-amber-100 hover:text-amber-900"
                 }`}
               >
-                {f.label}
+                <Icon className="w-5 h-5" />
+                <span className="hidden sm:inline">{f.label}</span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
         {/* Orders Grid */}
         {loading && filteredOrders.length === 0 ? (
-          <div className="flex items-center justify-center py-20">
-            <RefreshCw className="w-8 h-8 animate-spin text-amber-600" />
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+              <RefreshCw className="w-8 h-8 text-amber-600 animate-spin" />
+            </div>
+            <p className="text-zinc-600 font-medium">Memuat pesanan...</p>
           </div>
         ) : filteredOrders.length === 0 ? (
-          <div className="text-center py-20 bg-white/60 backdrop-blur-sm rounded-3xl border border-zinc-200/60">
-            <div className="w-16 h-16 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-zinc-400" />
+          <div className="text-center py-20 bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-dashed border-amber-200">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-amber-600" />
             </div>
             <h3 className="text-lg font-bold text-zinc-900 mb-1">
               Tidak ada pesanan
             </h3>
-            <p className="text-sm text-zinc-500">
+            <p className="text-sm text-zinc-500 max-w-sm mx-auto">
               Pesanan baru akan muncul di sini secara otomatis.
             </p>
           </div>
@@ -208,24 +240,27 @@ export default function KasirPage() {
   );
 }
 
-// Komponen Kecil untuk Stat Card agar kode lebih rapi
-function StatCard({ title, value, icon: Icon, color }) {
+// Komponen Stat Card (Persis seperti Admin Page)
+function StatCard({ title, value, icon: Icon, color, gradient }) {
   const colorClasses = {
     blue: "bg-blue-50 text-blue-700 border-blue-100",
     orange: "bg-orange-50 text-orange-700 border-orange-100",
     emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    zinc: "bg-zinc-100 text-zinc-700 border-zinc-200",
+    amber: "bg-amber-50 text-amber-700 border-amber-100",
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm hover:shadow-md transition-all duration-300">
+    <div
+      className={`bg-gradient-to-br ${gradient} rounded-2xl p-6 shadow-xl shadow-${color}-500/20 text-white hover:shadow-2xl hover:shadow-${color}-500/30 hover:-translate-y-1 transition-all duration-300`}
+    >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-zinc-500">{title}</span>
-        <div className={`p-2 rounded-xl ${colorClasses[color]}`}>
-          <Icon className="w-5 h-5" />
+        <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+          <Icon className="w-6 h-6" />
         </div>
+        <span className="text-sm font-semibold text-white/90">{title}</span>
       </div>
-      <p className="text-3xl font-bold text-zinc-900 tracking-tight">{value}</p>
+      <p className="text-4xl font-bold">{value}</p>
+      <p className="text-sm text-white/80 mt-1">Pesanan hari ini</p>
     </div>
   );
 }

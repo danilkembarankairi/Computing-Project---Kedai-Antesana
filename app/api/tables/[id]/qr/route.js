@@ -4,20 +4,32 @@ import { Table } from "@/models/Table";
 import QRCode from "qrcode";
 
 export async function GET(req, { params }) {
-  await dbConnect();
-  const table = await Table.findById(params.id);
-  if (!table) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  try {
+    await dbConnect();
+    const { id } = params;
 
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
-  const url = `${baseUrl}/order?table=${table.tableNumber}`;
-  const qrCodeUrl = await QRCode.toDataURL(url, {
-    width: 400,
-    margin: 2,
-    color: { dark: "#2C1810", light: "#FFFFFF" },
-  });
+    const table = await Table.findById(id);
+    if (!table) {
+      return NextResponse.json(
+        { error: "Meja tidak ditemukan" },
+        { status: 404 },
+      );
+    }
 
-  table.qrCodeUrl = qrCodeUrl;
-  await table.save();
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const orderUrl = `${appUrl}/order?table=${table.tableNumber}`;
 
-  return NextResponse.json({ qrCodeUrl, url });
+    const qrCodeUrl = await QRCode.toDataURL(orderUrl);
+
+    table.qrCodeUrl = qrCodeUrl;
+    await table.save();
+
+    return NextResponse.json(
+      { qrCodeUrl, tableNumber: table.tableNumber },
+      { status: 200 },
+    );
+  } catch (error) {
+    console.error("QR Error:", error);
+    return NextResponse.json({ error: "Gagal generate QR" }, { status: 500 });
+  }
 }

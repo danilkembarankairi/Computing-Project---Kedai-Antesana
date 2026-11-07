@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import MenuCard from "@/components/MenuCard";
 import Cart from "@/components/Cart";
 import CustomerForm from "@/components/CustomerForm";
@@ -18,13 +19,12 @@ import {
   ChevronRight,
   ShieldCheck,
   Wifi,
-  Bell,
   Sun,
   Moon,
   Sunset,
+  Home,
 } from "lucide-react";
 
-// Fungsi untuk mendapatkan salam berdasarkan waktu
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour >= 5 && hour < 12) {
@@ -38,7 +38,6 @@ function getGreeting() {
   }
 }
 
-// Data Banner Carousel (3 Slide - Tanpa Diskon)
 const bannerSlides = [
   {
     id: 1,
@@ -68,7 +67,9 @@ const bannerSlides = [
 
 function OrderContent() {
   const searchParams = useSearchParams();
-  const tableNumber = searchParams.get("table");
+  const router = useRouter();
+  const tableNumber = searchParams.get("table") || "Takeaway";
+  const isTakeaway = tableNumber === "Takeaway"; // ✅ Cek apakah mode Takeaway
   const greeting = getGreeting();
   const GreetingIcon = greeting.icon;
 
@@ -82,6 +83,7 @@ function OrderContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDesktop, setIsDesktop] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [countdown, setCountdown] = useState(4);
 
   useEffect(() => {
     fetch("/api/menu")
@@ -95,13 +97,42 @@ function OrderContent() {
     return () => window.removeEventListener("resize", checkDesktop);
   }, []);
 
-  // Auto-play Carousel setiap 5 detik
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % bannerSlides.length);
     }, 5000);
     return () => clearInterval(timer);
   }, []);
+
+  // ✅ FIX: Timer dengan cache-busting untuk memaksa reload
+  useEffect(() => {
+    if (step === "success") {
+      setCountdown(4);
+
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+
+            // ✅ Clear cart sebelum redirect
+            setCart([]);
+
+            // ✅ Cache-busting: tambah timestamp agar browser WAJIB reload
+            setTimeout(() => {
+              const currentUrl = window.location.href;
+              const separator = currentUrl.includes("?") ? "&" : "?";
+              window.location.href = `${currentUrl}${separator}refresh=${Date.now()}`;
+            }, 100);
+
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(timer);
+    }
+  }, [step]);
 
   const addToCart = (item) => {
     setCart((prev) => {
@@ -144,12 +175,14 @@ function OrderContent() {
 
       const data = await res.json();
 
-      // Jika memilih QRIS dan ada paymentToken dari backend
+      const goToSuccess = (order) => {
+        setOrderResult(order);
+        setStep("success");
+      };
+
       if (paymentMethod === "qris" && data.paymentToken) {
-        // 1. Cek apakah script Midtrans sudah dimuat di browser
         if (!window.snap) {
           const script = document.createElement("script");
-          // Gunakan URL sandbox karena MIDTRANS_IS_PRODUCTION=false
           script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
           script.setAttribute(
             "data-client-key",
@@ -158,25 +191,21 @@ function OrderContent() {
           script.async = true;
           document.body.appendChild(script);
 
-          // Tunggu script selesai dimuat (maksimal 3 detik)
           await new Promise((resolve) => {
             script.onload = resolve;
             setTimeout(resolve, 3000);
           });
         }
 
-        // 2. Buka Popup Midtrans
         if (window.snap) {
           window.snap.pay(data.paymentToken, {
             onSuccess: function (result) {
               console.log("Pembayaran Berhasil:", result);
-              setOrderResult(data.order);
-              setStep("success");
+              goToSuccess(data.order);
             },
             onPending: function (result) {
               console.log("Menunggu Pembayaran:", result);
-              setOrderResult(data.order);
-              setStep("success"); // Bisa juga dibuat step "pending"
+              goToSuccess(data.order);
             },
             onError: function (result) {
               console.log("Pembayaran Gagal:", result);
@@ -186,7 +215,6 @@ function OrderContent() {
             },
             onClose: function () {
               console.log("Popup ditutup tanpa menyelesaikan pembayaran");
-              // JANGAN pindah ke success, biarkan user tetap di halaman payment
               alert(
                 "Pembayaran dibatalkan. Silakan coba lagi atau pilih bayar di kasir.",
               );
@@ -198,9 +226,7 @@ function OrderContent() {
           );
         }
       } else {
-        // Jika bayar di kasir (atau token tidak ada), langsung success
-        setOrderResult(data.order);
-        setStep("success");
+        goToSuccess(data.order);
       }
     } catch (err) {
       console.error("Order error:", err);
@@ -220,18 +246,17 @@ function OrderContent() {
   });
   const featuredMenus = menu.filter((m) => m.isFeatured).slice(0, 4);
 
-  // --- ERROR STATE ---
   if (!tableNumber) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-[#faf8f5]">
-        <div className="text-center max-w-md w-full bg-white rounded-[2rem] p-10 shadow-xl border border-zinc-200/50 animate-scale-in">
-          <div className="w-20 h-20 bg-zinc-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Coffee className="w-10 h-10 text-zinc-400" />
+      <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50">
+        <div className="text-center max-w-md w-full bg-white rounded-3xl p-10 shadow-2xl border-4 border-amber-200 animate-in zoom-in-95 duration-300">
+          <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-amber-500/30">
+            <Coffee className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 mb-3 tracking-tight">
+          <h1 className="text-2xl font-bold text-zinc-900 mb-3">
             QR Code Tidak Valid
           </h1>
-          <p className="text-zinc-500 text-sm leading-relaxed">
+          <p className="text-zinc-600 font-medium">
             Silakan scan QR Code yang tersedia di meja Anda untuk memulai
             pemesanan.
           </p>
@@ -240,135 +265,175 @@ function OrderContent() {
     );
   }
 
-  // --- SUCCESS STATE ---
   if (step === "success") {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-[#faf8f5]">
-        <div className="max-w-md w-full bg-white rounded-[2rem] p-8 shadow-2xl border border-zinc-200/50 text-center animate-scale-in">
-          <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6 ring-4 ring-green-50">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50">
+        <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border-4 border-emerald-200 text-center animate-in zoom-in-95 duration-300">
+          <div className="w-24 h-24 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-500/30">
+            <CheckCircle className="w-14 h-14 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-900 mb-2 tracking-tight">
+          <h1 className="text-3xl font-bold text-zinc-900 mb-2">
             Pesanan Diterima!
           </h1>
-          <p className="text-zinc-500 text-sm mb-8">
+          <p className="text-zinc-600 mb-8 font-medium">
             Konfirmasi telah dikirim ke{" "}
-            <span className="text-zinc-900 font-semibold">
-              {customer.email}
-            </span>
+            <span className="text-zinc-900 font-bold">{customer?.email}</span>
           </p>
 
-          <div className="bg-zinc-50 rounded-2xl p-6 mb-6 text-left space-y-4 border border-zinc-100">
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-6 mb-6 border-2 border-amber-200 text-left space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-zinc-500 text-sm font-medium">
+              <span className="text-zinc-600 font-semibold text-sm">
                 ID Pesanan
               </span>
-              <span className="font-mono font-bold text-zinc-900 text-sm tracking-wide">
-                {orderResult.orderNumber}
+              <span className="font-mono font-bold text-zinc-900">
+                {orderResult?.orderNumber}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-zinc-500 text-sm font-medium">Lokasi</span>
-              <span className="font-semibold text-zinc-900 text-sm">
-                Meja #{tableNumber}
+              <span className="text-zinc-600 font-semibold text-sm">
+                Lokasi
+              </span>
+              <span className="font-bold text-zinc-900">
+                {tableNumber === "Takeaway"
+                  ? "Takeaway"
+                  : `Meja #${tableNumber}`}
               </span>
             </div>
-            <div className="border-t border-zinc-200 pt-4 flex justify-between items-center">
+            <div className="border-t-2 border-amber-200 pt-4 flex justify-between items-center">
               <span className="font-bold text-zinc-900">Total Pembayaran</span>
-              <span className="font-bold text-amber-600 text-xl">
-                Rp {orderResult.totalAmount.toLocaleString("id-ID")}
+              <span className="font-bold text-amber-700 text-2xl">
+                Rp {orderResult?.totalAmount.toLocaleString("id-ID")}
               </span>
             </div>
           </div>
 
-          <div className="flex items-start gap-4 bg-amber-50 border border-amber-100 rounded-2xl p-5 text-left">
-            <ShieldCheck className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-900 leading-relaxed font-medium">
-              {orderResult.paymentMethod === "qris"
-                ? "Silakan selesaikan pembayaran QRIS Anda. Pesanan akan langsung diproses oleh barista setelah pembayaran terkonfirmasi."
+          <div className="flex items-start gap-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 text-left">
+            <ShieldCheck className="w-6 h-6 text-emerald-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-emerald-900 leading-relaxed font-medium">
+              {orderResult?.paymentMethod === "qris"
+                ? "Silakan selesaikan pembayaran QRIS Anda. Pesanan akan langsung diproses oleh barista."
                 : "Silakan lakukan pembayaran di kasir setelah pesanan Anda siap disajikan."}
             </p>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            <div className="w-full bg-zinc-200 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-amber-500 to-orange-600 h-full transition-all duration-1000 ease-linear"
+                style={{ width: `${(countdown / 4) * 100}%` }}
+              ></div>
+            </div>
+            <p className="text-sm text-zinc-600 font-medium">
+              Kembali ke menu dalam{" "}
+              <span className="font-bold text-amber-600 text-lg">
+                {countdown} detik
+              </span>
+              ...
+            </p>
+            <button
+              onClick={() =>
+                (window.location.href = `/order?table=${tableNumber}`)
+              }
+              className="text-xs text-amber-600 hover:text-amber-700 font-semibold underline"
+            >
+              Atau klik di sini untuk kembali sekarang
+            </button>
           </div>
         </div>
       </div>
     );
   }
 
-  // --- MAIN ORDER FLOW ---
   return (
-    <div className="min-h-screen relative pb-32 lg:pb-8 bg-[#faf8f5]">
+    <div className="min-h-screen relative pb-32 lg:pb-8 bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50 selection:bg-amber-200 selection:text-amber-900">
       {/* Premium Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/90 border-b border-zinc-200/60 supports-[backdrop-filter]:bg-white/80 transition-all duration-300">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 lg:h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3 lg:gap-4">
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-gradient-to-r from-amber-100/95 via-orange-100/95 to-amber-100/95 border-b-2 border-amber-200 shadow-lg transition-all duration-300">
+        <div className="max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
+          {/* Kiri: Tombol + Logo + Judul */}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {/* ✅ TOMBOL HOME - HANYA muncul jika Takeaway */}
+            {isTakeaway && step === "menu" && (
+              <Link
+                href="/"
+                className="p-1.5 text-zinc-400 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-all duration-200 active:scale-95 flex-shrink-0"
+                title="Kembali ke Beranda"
+              >
+                <Home className="w-4 h-4 sm:w-5 sm:h-5" />
+              </Link>
+            )}
+
+            {/* TOMBOL KEMBALI - Muncul saat di data/payment */}
             {step !== "menu" && (
               <button
                 onClick={() => setStep(step === "payment" ? "data" : "menu")}
-                className="p-2 -ml-2 hover:bg-zinc-100 rounded-xl transition-all duration-200 lg:hidden group"
+                className="p-1.5 text-zinc-500 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-all duration-200 active:scale-95 flex-shrink-0"
+                title="Kembali"
               >
-                <ArrowLeft className="w-5 h-5 text-zinc-600 group-hover:text-zinc-900 group-hover:-translate-x-0.5 transition-all" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             )}
 
-            {/* Logo Tanpa Sela Putih */}
-            <div className="relative group">
-              <div className="w-10 h-10 lg:w-11 lg:h-11 rounded-xl overflow-hidden shadow-md group-hover:shadow-lg transition-all duration-300">
+            {/* Logo */}
+            <div className="relative flex-shrink-0">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl overflow-hidden border-2 border-amber-200 shadow-sm bg-white">
                 <img
                   src="/kedai-antasena.jpeg"
-                  alt="Logo Kedai Antasena"
+                  alt="Logo"
                   className="w-full h-full object-cover"
                 />
               </div>
-              <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 sm:h-3.5 sm:w-3.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-green-500 border-2 border-white"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3.5 sm:w-3.5 bg-green-500 border-2 border-white"></span>
               </span>
             </div>
 
-            <div>
-              <h1 className="font-bold text-zinc-900 text-base lg:text-lg tracking-tight leading-none">
+            {/* Judul */}
+            <div className="min-w-0 flex-1">
+              <h1 className="font-bold text-zinc-900 text-sm sm:text-xl tracking-tight leading-none truncate">
                 Kedai Antasena
               </h1>
-              <p className="text-xs text-zinc-500 font-medium mt-0.5 flex items-center gap-1.5">
-                <span className="w-1 h-1 rounded-full bg-zinc-400"></span>
-                Pemesanan Digital • Meja #{tableNumber}
+              <p className="text-[10px] sm:text-xs text-zinc-600 font-medium mt-0.5 flex items-center gap-1 truncate">
+                <span className="w-1 h-1 rounded-full bg-zinc-400 flex-shrink-0"></span>
+                <span className="truncate">
+                  {tableNumber === "Takeaway"
+                    ? "Takeaway"
+                    : `Meja #${tableNumber}`}
+                </span>
               </p>
             </div>
           </div>
 
-          <div className="hidden lg:flex items-center gap-3">
-            {/* WiFi Info */}
-            <div className="flex items-center gap-2 text-xs text-zinc-600 bg-zinc-100/80 px-3.5 py-2 rounded-xl border border-zinc-200/80">
-              <Wifi className="w-3.5 h-3.5 text-zinc-500" />
-              <span className="font-medium">WiFi: Antasena_Guest</span>
-              <span className="text-zinc-300">|</span>
-              <span className="font-mono text-zinc-800 font-semibold bg-white px-1.5 py-0.5 rounded border border-zinc-200">
-                kedaiantasena2026
-              </span>
+          {/* Kanan: Mobile = WiFi saja, Desktop = WiFi + Pembayaran + Greeting */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            {/* Mobile: Hanya WiFi */}
+            <div className="flex sm:hidden items-center gap-1 text-[10px] font-bold text-amber-800 bg-white px-2 py-1.5 rounded-lg border-2 border-amber-200 shadow-sm">
+              <Wifi className="w-3 h-3" />
+              <span className="font-mono text-[9px]">kedai2026</span>
             </div>
 
-            {/* Trust Badge */}
-            <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50/80 px-3.5 py-2 rounded-xl border border-green-100">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span className="font-semibold">Pembayaran Aman</span>
-            </div>
+            {/* Desktop: WiFi + Pembayaran Aman + Greeting */}
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border-2 border-amber-200">
+                <Wifi className="w-3.5 h-3.5" />
+                <span>Antasena_Guest</span>
+                <span className="text-amber-300">|</span>
+                <span className="font-mono text-amber-900 bg-white px-1.5 py-0.5 rounded border border-amber-200 text-[10px]">
+                  kedai2026
+                </span>
+              </div>
 
-            {/* Greeting Dinamis (Pagi/Siang/Sore/Malam) */}
-            <div
-              className={`flex items-center gap-2 text-xs font-semibold ${greeting.color} bg-white px-3.5 py-2 rounded-xl border border-zinc-200 shadow-sm`}
-            >
-              <GreetingIcon className="w-3.5 h-3.5" />
-              <span>{greeting.text}</span>
-            </div>
-          </div>
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border-2 border-emerald-200">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Pembayaran Aman</span>
+              </div>
 
-          {/* Mobile Greeting */}
-          <div className="lg:hidden">
-            <div
-              className={`flex items-center gap-1.5 text-xs font-semibold ${greeting.color} bg-white px-3 py-1.5 rounded-lg border border-zinc-200 shadow-sm`}
-            >
-              <GreetingIcon className="w-3.5 h-3.5" />
-              <span>{greeting.text}</span>
+              <div
+                className={`flex items-center gap-1.5 text-xs font-bold ${greeting.color} bg-white px-3 py-1.5 rounded-xl border-2 border-amber-200 shadow-sm`}
+              >
+                <GreetingIcon className="w-3.5 h-3.5" />
+                <span>{greeting.text}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -376,9 +441,9 @@ function OrderContent() {
 
       <main className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {step === "menu" && (
-          <div className="animate-fade-in-up space-y-6">
-            {/* Banner Carousel - Auto Swipe Only (Tanpa Tombol Panah) */}
-            <div className="relative overflow-hidden rounded-[1.5rem] shadow-xl shadow-zinc-900/10 h-[200px] sm:h-[240px] lg:h-[280px]">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Banner Carousel */}
+            <div className="relative overflow-hidden rounded-3xl shadow-2xl h-[200px] sm:h-[240px] lg:h-[280px] border-2 border-amber-200/50">
               {bannerSlides.map((slide, index) => (
                 <div
                   key={slide.id}
@@ -388,31 +453,30 @@ function OrderContent() {
                       : "opacity-0 translate-x-10 scale-105 z-0 pointer-events-none"
                   }`}
                 >
-                  <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
                   <div className="relative z-10 p-6 lg:p-10 w-full flex flex-col justify-center h-full">
-                    <div className="inline-flex items-center rounded-full bg-white/10 backdrop-blur-md px-3 py-1 text-xs font-semibold text-white ring-1 ring-inset ring-white/20 mb-3 w-fit">
+                    <div className="inline-flex items-center rounded-full bg-white/20 backdrop-blur-md px-3 py-1 text-xs font-bold text-white ring-2 ring-white/30 mb-3 w-fit">
                       <Sparkles className="w-3 h-3 mr-1.5" /> {slide.badge}
                     </div>
-                    <h2 className="text-2xl lg:text-4xl font-bold tracking-tight mb-2 leading-tight text-white max-w-xl">
+                    <h2 className="text-2xl lg:text-4xl font-black tracking-tight mb-2 leading-tight text-white max-w-xl drop-shadow-md">
                       {slide.title}
                     </h2>
-                    <p className="text-zinc-200 text-xs lg:text-sm leading-relaxed max-w-lg">
+                    <p className="text-white/90 text-xs lg:text-sm leading-relaxed max-w-lg drop-shadow-sm">
                       {slide.subtitle}
                     </p>
                   </div>
                 </div>
               ))}
 
-              {/* Carousel Dots (Indikator tetap ada) */}
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2">
                 {bannerSlides.map((_, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentSlide(index)}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                    className={`h-2 rounded-full transition-all duration-300 ${
                       currentSlide === index
-                        ? "w-6 bg-white"
-                        : "w-1.5 bg-white/40 hover:bg-white/60"
+                        ? "w-8 bg-white"
+                        : "w-2 bg-white/50 hover:bg-white/80"
                     }`}
                   />
                 ))}
@@ -421,15 +485,13 @@ function OrderContent() {
 
             {/* Search Bar */}
             <div className="relative group max-w-2xl mx-auto">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400 group-focus-within:text-amber-600 transition-colors duration-300">
-                <Search className="w-full h-full" />
-              </div>
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-600 group-focus-within:text-amber-700 transition-colors" />
               <input
                 type="text"
                 placeholder="Cari menu favorit Anda..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-2xl border border-zinc-200 bg-white/80 backdrop-blur-sm py-3.5 pl-12 pr-4 text-sm shadow-sm shadow-zinc-200/50 transition-all duration-300 placeholder:text-zinc-400 focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:bg-white"
+                className="w-full rounded-2xl border-2 border-amber-200 bg-white py-3.5 pl-12 pr-4 text-sm font-medium shadow-md focus:border-amber-500 focus:outline-none focus:ring-4 focus:ring-amber-500/20 transition-all"
               />
             </div>
 
@@ -438,21 +500,18 @@ function OrderContent() {
               !searchQuery &&
               featuredMenus.length > 0 && (
                 <div
-                  className="animate-fade-in-up"
+                  className="animate-in fade-in slide-in-from-bottom-4 duration-500"
                   style={{ animationDelay: "0.1s" }}
                 >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2.5">
-                      <div className="p-2 bg-red-50 rounded-xl border border-red-100">
-                        <Flame className="w-5 h-5 text-red-500" />
+                      <div className="p-2 bg-red-100 rounded-xl border-2 border-red-200">
+                        <Flame className="w-5 h-5 text-red-600" />
                       </div>
                       <h3 className="font-bold text-zinc-900 tracking-tight text-lg">
                         Paling Laris
                       </h3>
                     </div>
-                    <button className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1 transition-colors">
-                      Lihat Semua <ChevronRight className="w-3 h-3" />
-                    </button>
                   </div>
 
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
@@ -460,15 +519,15 @@ function OrderContent() {
                       <div
                         key={item._id}
                         onClick={() => addToCart(item)}
-                        className="group cursor-pointer"
+                        className="group cursor-pointer bg-white rounded-2xl border-2 border-amber-200 p-3 shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
                       >
-                        <div className="relative aspect-square rounded-2xl overflow-hidden bg-zinc-100 mb-2 shadow-sm ring-1 ring-zinc-100 group-hover:ring-amber-500/30 group-hover:shadow-xl group-hover:shadow-amber-900/5 transition-all duration-300">
+                        <div className="relative aspect-square rounded-xl overflow-hidden bg-zinc-100 mb-3">
                           <img
                             src={item.imageUrl}
                             alt={item.name}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                           />
-                          <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-md rounded-full px-2 py-1 flex items-center gap-1 shadow-sm ring-1 ring-black/5">
+                          <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-md rounded-full px-2 py-1 flex items-center gap-1 shadow-sm border border-zinc-100">
                             <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
                             <span className="text-xs font-bold text-zinc-900">
                               {item.rating}
@@ -480,10 +539,10 @@ function OrderContent() {
                             </span>
                           </div>
                         </div>
-                        <h4 className="font-semibold text-sm text-zinc-900 line-clamp-1 group-hover:text-amber-700 transition-colors">
+                        <h4 className="font-bold text-sm text-zinc-900 line-clamp-1 group-hover:text-amber-700 transition-colors">
                           {item.name}
                         </h4>
-                        <p className="text-amber-700 font-bold text-sm mt-0.5">
+                        <p className="text-amber-700 font-bold text-sm mt-1">
                           Rp {item.price.toLocaleString("id-ID")}
                         </p>
                       </div>
@@ -492,17 +551,17 @@ function OrderContent() {
                 </div>
               )}
 
-            {/* Category Tabs */}
-            <div className="sticky top-20 z-30 bg-transparent py-2 -mx-4 px-4 lg:mx-0 lg:px-0 lg:static">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2 lg:pb-0">
+            {/* Category Tabs - Unified */}
+            <div className="sticky top-16 sm:top-20 z-30 bg-gradient-to-br from-amber-50/95 to-orange-50/95 backdrop-blur-lg py-2 -mx-3 px-3 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 lg:static lg:bg-transparent lg:backdrop-blur-none">
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
                 {categories.map((c) => (
                   <button
                     key={c}
                     onClick={() => setCategory(c)}
-                    className={`px-5 py-2.5 rounded-full text-sm font-semibold whitespace-nowrap transition-all duration-300 ${
+                    className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 active:scale-95 ${
                       category === c
-                        ? "bg-zinc-900 text-white shadow-lg shadow-zinc-900/20 scale-105"
-                        : "bg-white/80 backdrop-blur-sm text-zinc-600 border border-zinc-200 hover:border-zinc-300 hover:bg-white"
+                        ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30"
+                        : "bg-white/80 text-zinc-700 border border-amber-200/60 hover:border-amber-400 hover:bg-white"
                     }`}
                   >
                     {c}
@@ -513,11 +572,10 @@ function OrderContent() {
 
             {/* Menu Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
-              {filteredMenu.map((item, idx) => (
+              {filteredMenu.map((item) => (
                 <div
                   key={item._id}
-                  className="animate-fade-in-up"
-                  style={{ animationDelay: `${idx * 0.05}s` }}
+                  className="animate-in fade-in slide-in-from-bottom-4 duration-500"
                 >
                   <MenuCard
                     item={item}
@@ -532,11 +590,11 @@ function OrderContent() {
             </div>
 
             {filteredMenu.length === 0 && (
-              <div className="text-center py-20 bg-white/80 backdrop-blur-sm rounded-3xl border border-zinc-100 shadow-sm animate-fade-in">
-                <div className="w-16 h-16 bg-zinc-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Search className="w-8 h-8 text-zinc-300" />
+              <div className="text-center py-16 bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-dashed border-amber-200">
+                <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search className="w-8 h-8 text-amber-600" />
                 </div>
-                <p className="text-zinc-900 font-bold text-lg">
+                <p className="font-bold text-zinc-900 text-lg">
                   Menu tidak ditemukan
                 </p>
                 <p className="text-sm text-zinc-500 mt-2 max-w-xs mx-auto">
@@ -548,8 +606,8 @@ function OrderContent() {
         )}
 
         {step === "data" && (
-          <div className="max-w-lg mx-auto animate-scale-in">
-            <div className="bg-white/90 backdrop-blur-md rounded-[2rem] p-6 lg:p-10 shadow-xl border border-zinc-200/50">
+          <div className="max-w-lg mx-auto">
+            <div className="bg-white rounded-3xl p-6 lg:p-10 shadow-2xl border-4 border-amber-200">
               <CustomerForm
                 onSubmit={(data) => {
                   setCustomer(data);
@@ -562,8 +620,8 @@ function OrderContent() {
         )}
 
         {step === "payment" && (
-          <div className="max-w-lg mx-auto animate-scale-in">
-            <div className="bg-white/90 backdrop-blur-md rounded-[2rem] p-6 lg:p-10 shadow-xl border border-zinc-200/50">
+          <div className="max-w-lg mx-auto">
+            <div className="bg-white rounded-3xl p-6 lg:p-10 shadow-2xl border-4 border-amber-200">
               <PaymentView
                 total={cart.reduce((s, i) => s + i.price * i.quantity, 0)}
                 onSubmit={submitOrder}
@@ -592,10 +650,12 @@ export default function OrderPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-[#faf8f5]">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50">
           <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 animate-spin text-amber-600" />
-            <p className="text-sm text-zinc-500 font-medium animate-pulse">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+            </div>
+            <p className="text-sm text-zinc-600 font-medium animate-pulse">
               Memuat menu...
             </p>
           </div>

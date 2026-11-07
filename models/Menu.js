@@ -9,9 +9,9 @@ const menuSchema = new mongoose.Schema(
       required: true,
     },
     price: { type: Number, required: true },
-    description: { type: String },
-    imageUrl: { type: String },
-    isAvailable: { type: Boolean, default: true },
+    description: { type: String, default: "" },
+    imageUrl: { type: String, default: "" },
+    isAvailable: { type: Boolean, default: true }, // Kunci untuk fitur Habis/Tersedia
   },
   { timestamps: true },
 );
