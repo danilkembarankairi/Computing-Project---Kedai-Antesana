@@ -154,7 +154,6 @@ function OrderContent() {
   const submitOrder = async (paymentMethod) => {
     setLoading(true);
     try {
-      // ✅ Hitung total di frontend untuk dikirim ke backend (memastikan data lengkap)
       const calculatedTotal = cart.reduce(
         (sum, item) => sum + item.price * item.quantity,
         0,
@@ -168,11 +167,10 @@ function OrderContent() {
           customer,
           items: cart,
           paymentMethod,
-          totalAmount: calculatedTotal, // ✅ Kirim totalAmount agar backend pasti menyimpannya
+          totalAmount: calculatedTotal,
         }),
       });
 
-      // ✅ Cek jika backend mengembalikan error
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.message || "Gagal membuat pesanan di server");
@@ -181,7 +179,6 @@ function OrderContent() {
       const data = await res.json();
 
       const goToSuccess = (order) => {
-        // ✅ Pastikan 1 ID Pesanan untuk 1 Transaksi selalu muncul
         const finalOrder = {
           ...order,
           orderNumber:
@@ -260,6 +257,8 @@ function OrderContent() {
       .includes(searchQuery.toLowerCase());
     return matchCategory && matchSearch;
   });
+
+  // ✅ Logic: Ambil maksimal 4 menu favorit
   const featuredMenus = menu.filter((m) => m.isFeatured).slice(0, 4);
 
   // ✅ SUCCESS STATE
@@ -436,6 +435,7 @@ function OrderContent() {
       <main className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {step === "menu" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Banner Carousel */}
             <div className="relative overflow-hidden rounded-3xl shadow-2xl h-[200px] sm:h-[240px] lg:h-[280px] border-2 border-amber-200/50">
               {bannerSlides.map((slide, index) => (
                 <div
@@ -476,6 +476,7 @@ function OrderContent() {
               </div>
             </div>
 
+            {/* Search Bar */}
             <div className="relative group max-w-2xl mx-auto">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-600 group-focus-within:text-amber-700 transition-colors" />
               <input
@@ -487,6 +488,7 @@ function OrderContent() {
               />
             </div>
 
+            {/* ✅ Featured Section: Hanya muncul jika ada menu favorit (length > 0) */}
             {category === "Semua" &&
               !searchQuery &&
               featuredMenus.length > 0 && (
@@ -505,7 +507,7 @@ function OrderContent() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 lg:gap-4">
                     {featuredMenus.map((item) => (
                       <div
                         key={item._id}
@@ -542,6 +544,7 @@ function OrderContent() {
                 </div>
               )}
 
+            {/* Category Tabs */}
             <div className="sticky top-16 sm:top-20 z-30 bg-gradient-to-br from-amber-50/95 to-orange-50/95 backdrop-blur-lg py-2 -mx-3 px-3 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 lg:static lg:bg-transparent lg:backdrop-blur-none">
               <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
                 {categories.map((c) => (
@@ -560,6 +563,7 @@ function OrderContent() {
               </div>
             </div>
 
+            {/* Menu Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
               {filteredMenu.map((item) => (
                 <div
@@ -578,6 +582,7 @@ function OrderContent() {
               ))}
             </div>
 
+            {/* Empty State */}
             {filteredMenu.length === 0 && (
               <div className="text-center py-16 bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-dashed border-amber-200">
                 <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">

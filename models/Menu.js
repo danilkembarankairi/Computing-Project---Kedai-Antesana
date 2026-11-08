@@ -11,7 +11,8 @@ const menuSchema = new mongoose.Schema(
     price: { type: Number, required: true },
     description: { type: String, default: "" },
     imageUrl: { type: String, default: "" },
-    isAvailable: { type: Boolean, default: true }, // Kunci untuk fitur Habis/Tersedia
+    isAvailable: { type: Boolean, default: true },
+    isFeatured: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

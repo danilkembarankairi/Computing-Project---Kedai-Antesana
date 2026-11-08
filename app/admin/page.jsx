@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
   Flame,
   Home,
+  Star,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -78,9 +79,30 @@ export default function AdminPage() {
     fetchTables();
   }, []);
 
+  // ✅ LOGIKA REAL-TIME: Hitung jumlah menu favorit saat ini
+  const totalFeaturedCount = menus.filter((m) => m.isFeatured).length;
+
+  // Cek apakah user mencoba MENAMBAH menu favorit baru (bukan mengedit yang sudah ada)
+  const isNewFeatured = menuForm.isFeatured && !editingMenu?.isFeatured;
+
+  // Batas tercapai jika total sudah 4 DAN user mencoba menambah yang baru
+  const isFeaturedLimitReached = totalFeaturedCount >= 4 && isNewFeatured;
+
+  // Checkbox disabled jika batas 4 tercapai DAN checkbox sedang tidak dicentang
+  const shouldDisableFeaturedCheckbox =
+    totalFeaturedCount >= 4 && !menuForm.isFeatured;
   // --- FUNGSI MENU ---
   const handleMenuSubmit = async (e) => {
     e.preventDefault();
+
+    // ✅ VALIDASI: Cek batas maksimal 4 menu favorit
+    if (menuForm.isFeatured && totalFeaturedCount >= 4 && !editingMenu) {
+      alert(
+        "⚠️ Maksimal hanya 4 Menu Favorit!\n\nSilakan hapus centang 'Menu Favorit' pada menu lain terlebih dahulu sebelum menambahkan yang baru.",
+      );
+      return; // Batalkan proses submit
+    }
+
     setIsSubmittingMenu(true);
     try {
       const method = editingMenu ? "PUT" : "POST";
@@ -218,7 +240,6 @@ export default function AdminPage() {
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-gradient-to-r from-amber-100/90 via-orange-100/90 to-amber-100/90 border-b border-amber-200/60 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* Tombol Kembali ke Beranda (Subtle & Tidak Mencolok) */}
             <Link
               href="/"
               className="p-2.5 text-zinc-400 hover:text-amber-700 hover:bg-amber-50 rounded-xl transition-all duration-200 active:scale-95"
@@ -227,7 +248,6 @@ export default function AdminPage() {
               <Home className="w-5 h-5" />
             </Link>
 
-            {/* Logo Kedai Antasena */}
             <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-amber-200 shadow-sm bg-white flex-shrink-0">
               <img
                 src="/kedai-antasena.jpeg"
@@ -317,19 +337,19 @@ export default function AdminPage() {
                 <p className="text-emerald-100 text-sm mt-1">Menu tersedia</p>
               </div>
 
-              <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-2xl p-6 shadow-xl shadow-red-500/20 text-white hover:shadow-2xl hover:shadow-red-500/30 hover:-translate-y-1 transition-all duration-300">
+              <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 shadow-xl shadow-amber-500/20 text-white hover:shadow-2xl hover:shadow-amber-500/30 hover:-translate-y-1 transition-all duration-300">
                 <div className="flex items-center justify-between mb-3">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                    <AlertCircle className="w-6 h-6" />
+                    <Star className="w-6 h-6" />
                   </div>
-                  <span className="text-red-100 text-sm font-semibold">
-                    Habis
+                  <span className="text-amber-100 text-sm font-semibold">
+                    Favorit
                   </span>
                 </div>
-                <p className="text-4xl font-bold">
-                  {menus.filter((m) => !m.isAvailable).length}
+                <p className="text-4xl font-bold">{totalFeaturedCount}/4</p>
+                <p className="text-amber-100 text-sm mt-1">
+                  Slot tersisa: {4 - totalFeaturedCount}
                 </p>
-                <p className="text-red-100 text-sm mt-1">Perlu restock</p>
               </div>
             </div>
 
@@ -746,6 +766,8 @@ export default function AdminPage() {
                     placeholder="Deskripsi singkat..."
                   />
                 </div>
+
+                {/* ✅ CHECKBOX DENGAN VALIDASI REAL-TIME */}
                 <div className="col-span-2 flex gap-4">
                   <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-zinc-200 bg-zinc-50 cursor-pointer flex-1 hover:bg-amber-50 hover:border-amber-300 transition-all active:scale-[0.98]">
                     <input
@@ -763,24 +785,66 @@ export default function AdminPage() {
                       Stok Tersedia
                     </span>
                   </label>
-                  <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-zinc-200 bg-zinc-50 cursor-pointer flex-1 hover:bg-amber-50 hover:border-amber-300 transition-all active:scale-[0.98]">
-                    <input
-                      type="checkbox"
-                      checked={menuForm.isFeatured}
-                      onChange={(e) =>
-                        setMenuForm({
-                          ...menuForm,
-                          isFeatured: e.target.checked,
-                        })
-                      }
-                      className="w-5 h-5 text-amber-600 rounded-lg border-2 border-zinc-300 focus:ring-amber-500/20"
-                    />
-                    <span className="text-sm font-bold text-zinc-900">
-                      Menu Favorit
-                    </span>
-                  </label>
+
+                  <div
+                    className={`flex-1 p-4 rounded-xl border-2 transition-all ${
+                      shouldDisableFeaturedCheckbox
+                        ? "bg-red-50 border-red-200 cursor-not-allowed opacity-60"
+                        : "bg-zinc-50 border-zinc-200 cursor-pointer hover:bg-amber-50 hover:border-amber-300"
+                    }`}
+                  >
+                    <label className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={menuForm.isFeatured}
+                        onChange={(e) => {
+                          if (
+                            !shouldDisableFeaturedCheckbox ||
+                            menuForm.isFeatured
+                          ) {
+                            setMenuForm({
+                              ...menuForm,
+                              isFeatured: e.target.checked,
+                            });
+                          }
+                        }}
+                        disabled={shouldDisableFeaturedCheckbox}
+                        className="w-5 h-5 text-amber-600 rounded-lg border-2 border-zinc-300 focus:ring-amber-500/20 disabled:cursor-not-allowed"
+                      />
+                      <div className="flex flex-col">
+                        <span
+                          className={`text-sm font-bold ${shouldDisableFeaturedCheckbox ? "text-red-700" : "text-zinc-900"}`}
+                        >
+                          Menu Favorit
+                        </span>
+                        <span className="text-[10px] text-zinc-500">
+                          {shouldDisableFeaturedCheckbox
+                            ? "Batas 4 tercapai"
+                            : `Sisa: ${4 - totalFeaturedCount} slot`}
+                        </span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
+
+              {shouldDisableFeaturedCheckbox && (
+                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-bold text-red-900">
+                      Batas Menu Favorit Penuh!
+                    </p>
+                    <p className="text-xs text-red-700 mt-1">
+                      Sudah ada <strong>4 menu favorit</strong>. Untuk menambah
+                      menu favorit baru, silakan edit salah satu menu yang sudah
+                      ada dan <strong>hilangkan centang "Menu Favorit"</strong>{" "}
+                      terlebih dahulu.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"

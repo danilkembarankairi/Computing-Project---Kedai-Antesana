@@ -10,6 +10,8 @@ import {
   ToggleRight,
   RefreshCw,
   Coffee,
+  Star,
+  AlertCircle, // ✅ Ditambahkan untuk ikon peringatan
 } from "lucide-react";
 
 export default function AdminMenuPage() {
@@ -44,11 +46,27 @@ export default function AdminMenuPage() {
     fetchMenus();
   }, []);
 
-  // 1. Fungsi Tambah / Edit Menu (Termasuk Ganti Harga)
+  // ✅ LOGIKA REAL-TIME: Hitung jumlah menu favorit saat ini
+  const featuredCount = menus.filter(
+    (m) => m.isFeatured && m._id !== (editing?._id || "new"),
+  ).length;
+
+  const isFeaturedLimitReached = featuredCount >= 4;
+  const shouldDisableFeaturedCheckbox =
+    isFeaturedLimitReached && !form.isFeatured;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
+    // Double-check validation (jaga-jaga jika ada cara bypass)
+    if (form.isFeatured && featuredCount >= 4 && !editing?._id) {
+      alert(
+        "⚠️ Maksimal hanya 4 Menu Favorit!\n\nSilakan hapus centang 'Menu Favorit' pada menu lain terlebih dahulu.",
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       const method = editing ? "PUT" : "POST";
       const url = editing ? `/api/menu/${editing._id}` : "/api/menu";
@@ -68,10 +86,8 @@ export default function AdminMenuPage() {
     }
   };
 
-  // 2. Fungsi Toggle Status Habis / Tersedia (1 Klik)
   const toggleStatus = async (id, currentStatus) => {
     try {
-      // Optimistic update (ubah UI dulu agar responsif)
       setMenus((prev) =>
         prev.map((m) =>
           m._id === id ? { ...m, isAvailable: !currentStatus } : m,
@@ -85,7 +101,7 @@ export default function AdminMenuPage() {
       });
     } catch (err) {
       console.error("Gagal update status:", err);
-      fetchMenus(); // Rollback jika error
+      fetchMenus();
     }
   };
 
@@ -171,6 +187,40 @@ export default function AdminMenuPage() {
           />
         </div>
 
+        {/* ✅ COUNTER BADGE & TIPS REAL-TIME */}
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div
+            className={`px-4 py-2 rounded-xl border-2 flex items-center gap-2 ${
+              isFeaturedLimitReached
+                ? "bg-red-50 border-red-200 text-red-700"
+                : "bg-emerald-50 border-emerald-200 text-emerald-700"
+            }`}
+          >
+            <Star className="w-5 h-5" />
+            <span className="font-bold text-sm">
+              Menu Favorit: {featuredCount}/4
+            </span>
+            {isFeaturedLimitReached && <AlertCircle className="w-4 h-4" />}
+          </div>
+
+          {featuredCount === 0 && (
+            <div className="px-4 py-2 rounded-xl border-2 border-blue-200 bg-blue-50 text-blue-800 flex items-center gap-2">
+              <span className="text-lg">💡</span>
+              <span className="text-sm font-medium">
+                Tambahkan hingga 4 menu favorit agar muncul di bagian{" "}
+                <strong>"Paling Laris"</strong> halaman pelanggan.
+              </span>
+            </div>
+          )}
+
+          {isFeaturedLimitReached && (
+            <p className="text-xs text-red-600 font-semibold">
+              ⚠️ Batas maksimal tercapai! Hapus satu favorit untuk menambah yang
+              baru.
+            </p>
+          )}
+        </div>
+
         {/* Data Table */}
         <div className="bg-white rounded-2xl border border-zinc-200/60 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
@@ -204,7 +254,14 @@ export default function AdminMenuPage() {
                       className="hover:bg-zinc-50/50 transition-colors group"
                     >
                       <td className="px-6 py-4">
-                        <p className="font-semibold text-zinc-900">{m.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-zinc-900">
+                            {m.name}
+                          </p>
+                          {m.isFeatured && (
+                            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                          )}
+                        </div>
                         <p className="text-xs text-zinc-500 line-clamp-1 max-w-[200px]">
                           {m.description || "Tidak ada deskripsi"}
                         </p>
@@ -361,6 +418,7 @@ export default function AdminMenuPage() {
                   />
                 </div>
 
+                {/* ✅ CHECKBOX DENGAN VALIDASI REAL-TIME & DISABLED STATE */}
                 <div className="col-span-2 flex gap-4">
                   <label className="flex items-center gap-2 p-3 rounded-xl border border-zinc-200 bg-zinc-50 cursor-pointer flex-1 hover:bg-zinc-100 transition-colors">
                     <input
@@ -375,19 +433,50 @@ export default function AdminMenuPage() {
                       Stok Tersedia
                     </span>
                   </label>
-                  <label className="flex items-center gap-2 p-3 rounded-xl border border-zinc-200 bg-zinc-50 cursor-pointer flex-1 hover:bg-zinc-100 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={form.isFeatured}
-                      onChange={(e) =>
-                        setForm({ ...form, isFeatured: e.target.checked })
-                      }
-                      className="w-4 h-4 text-amber-600 rounded border-zinc-300 focus:ring-amber-500/20"
-                    />
-                    <span className="text-sm font-semibold text-zinc-900">
-                      Menu Favorit
-                    </span>
-                  </label>
+
+                  <div
+                    className={`flex-1 p-3 rounded-xl border transition-all ${
+                      shouldDisableFeaturedCheckbox
+                        ? "bg-red-50 border-red-200 cursor-not-allowed opacity-60"
+                        : form.isFeatured
+                          ? "bg-amber-50 border-amber-200 cursor-pointer hover:bg-amber-100"
+                          : "bg-amber-50 border-amber-200 cursor-pointer hover:bg-amber-100"
+                    }`}
+                  >
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={form.isFeatured}
+                        onChange={(e) => {
+                          // Hanya izinkan perubahan jika checkbox tidak disabled
+                          if (
+                            !shouldDisableFeaturedCheckbox ||
+                            form.isFeatured
+                          ) {
+                            setForm({ ...form, isFeatured: e.target.checked });
+                          }
+                        }}
+                        disabled={shouldDisableFeaturedCheckbox}
+                        className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500/20 disabled:cursor-not-allowed"
+                      />
+                      <div className="flex flex-col">
+                        <span
+                          className={`text-sm font-semibold ${
+                            shouldDisableFeaturedCheckbox
+                              ? "text-red-700"
+                              : "text-amber-900"
+                          }`}
+                        >
+                          ⭐ Menu Favorit
+                        </span>
+                        <span className="text-[10px] text-amber-700">
+                          {shouldDisableFeaturedCheckbox
+                            ? "Batas 4 tercapai"
+                            : `Sisa: ${4 - featuredCount} slot`}
+                        </span>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               </div>
 
