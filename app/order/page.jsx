@@ -69,7 +69,7 @@ function OrderContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const tableNumber = searchParams.get("table") || "Takeaway";
-  const isTakeaway = tableNumber === "Takeaway"; // ✅ Cek apakah mode Takeaway
+  const isTakeaway = tableNumber === "Takeaway";
   const greeting = getGreeting();
   const GreetingIcon = greeting.icon;
 
@@ -104,32 +104,24 @@ function OrderContent() {
     return () => clearInterval(timer);
   }, []);
 
-  // ✅ FIX: Timer dengan cache-busting untuk memaksa reload
   useEffect(() => {
     if (step === "success") {
       setCountdown(4);
-
       const timer = setInterval(() => {
         setCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(timer);
-
-            // ✅ Clear cart sebelum redirect
             setCart([]);
-
-            // ✅ Cache-busting: tambah timestamp agar browser WAJIB reload
             setTimeout(() => {
               const currentUrl = window.location.href;
               const separator = currentUrl.includes("?") ? "&" : "?";
               window.location.href = `${currentUrl}${separator}refresh=${Date.now()}`;
             }, 100);
-
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-
       return () => clearInterval(timer);
     }
   }, [step]);
@@ -162,6 +154,12 @@ function OrderContent() {
   const submitOrder = async (paymentMethod) => {
     setLoading(true);
     try {
+      // ✅ Hitung total di frontend untuk dikirim ke backend (memastikan data lengkap)
+      const calculatedTotal = cart.reduce(
+        (sum, item) => sum + item.price * item.quantity,
+        0,
+      );
+
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,13 +168,29 @@ function OrderContent() {
           customer,
           items: cart,
           paymentMethod,
+          totalAmount: calculatedTotal, // ✅ Kirim totalAmount agar backend pasti menyimpannya
         }),
       });
+
+      // ✅ Cek jika backend mengembalikan error
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || "Gagal membuat pesanan di server");
+      }
 
       const data = await res.json();
 
       const goToSuccess = (order) => {
-        setOrderResult(order);
+        // ✅ Pastikan 1 ID Pesanan untuk 1 Transaksi selalu muncul
+        const finalOrder = {
+          ...order,
+          orderNumber:
+            order?.orderNumber ||
+            order?._id ||
+            `TRX-${Date.now().toString().slice(-6)}`,
+          totalAmount: order?.totalAmount || calculatedTotal,
+        };
+        setOrderResult(finalOrder);
         setStep("success");
       };
 
@@ -212,18 +226,21 @@ function OrderContent() {
               alert(
                 "Pembayaran gagal. Silakan coba lagi atau pilih bayar di kasir.",
               );
+              setLoading(false);
             },
             onClose: function () {
               console.log("Popup ditutup tanpa menyelesaikan pembayaran");
               alert(
                 "Pembayaran dibatalkan. Silakan coba lagi atau pilih bayar di kasir.",
               );
+              setLoading(false);
             },
           });
         } else {
           alert(
             "Gagal memuat sistem pembayaran Midtrans. Periksa Client Key Anda.",
           );
+          setLoading(false);
         }
       } else {
         goToSuccess(data.order);
@@ -231,7 +248,6 @@ function OrderContent() {
     } catch (err) {
       console.error("Order error:", err);
       alert("Gagal membuat pesanan: " + err.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -246,26 +262,11 @@ function OrderContent() {
   });
   const featuredMenus = menu.filter((m) => m.isFeatured).slice(0, 4);
 
-  if (!tableNumber) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50">
-        <div className="text-center max-w-md w-full bg-white rounded-3xl p-10 shadow-2xl border-4 border-amber-200 animate-in zoom-in-95 duration-300">
-          <div className="w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-amber-500/30">
-            <Coffee className="w-10 h-10 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900 mb-3">
-            QR Code Tidak Valid
-          </h1>
-          <p className="text-zinc-600 font-medium">
-            Silakan scan QR Code yang tersedia di meja Anda untuk memulai
-            pemesanan.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  // ✅ SUCCESS STATE
   if (step === "success") {
+    const displayId = orderResult?.orderNumber || "ID Tidak Ditemukan";
+    const displayTotal = orderResult?.totalAmount || 0;
+
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border-4 border-emerald-200 text-center animate-in zoom-in-95 duration-300">
@@ -285,8 +286,8 @@ function OrderContent() {
               <span className="text-zinc-600 font-semibold text-sm">
                 ID Pesanan
               </span>
-              <span className="font-mono font-bold text-zinc-900">
-                {orderResult?.orderNumber}
+              <span className="font-mono font-bold text-zinc-900 text-lg">
+                {displayId}
               </span>
             </div>
             <div className="flex justify-between items-center">
@@ -302,7 +303,7 @@ function OrderContent() {
             <div className="border-t-2 border-amber-200 pt-4 flex justify-between items-center">
               <span className="font-bold text-zinc-900">Total Pembayaran</span>
               <span className="font-bold text-amber-700 text-2xl">
-                Rp {orderResult?.totalAmount.toLocaleString("id-ID")}
+                Rp {displayTotal.toLocaleString("id-ID")}
               </span>
             </div>
           </div>
@@ -344,14 +345,13 @@ function OrderContent() {
     );
   }
 
+  // ✅ MAIN ORDER FLOW
   return (
     <div className="min-h-screen relative pb-32 lg:pb-8 bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50 selection:bg-amber-200 selection:text-amber-900">
       {/* Premium Header */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-gradient-to-r from-amber-100/95 via-orange-100/95 to-amber-100/95 border-b-2 border-amber-200 shadow-lg transition-all duration-300">
         <div className="max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between">
-          {/* Kiri: Tombol + Logo + Judul */}
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* ✅ TOMBOL HOME - HANYA muncul jika Takeaway */}
             {isTakeaway && step === "menu" && (
               <Link
                 href="/"
@@ -362,7 +362,6 @@ function OrderContent() {
               </Link>
             )}
 
-            {/* TOMBOL KEMBALI - Muncul saat di data/payment */}
             {step !== "menu" && (
               <button
                 onClick={() => setStep(step === "payment" ? "data" : "menu")}
@@ -373,7 +372,6 @@ function OrderContent() {
               </button>
             )}
 
-            {/* Logo */}
             <div className="relative flex-shrink-0">
               <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl overflow-hidden border-2 border-amber-200 shadow-sm bg-white">
                 <img
@@ -388,7 +386,6 @@ function OrderContent() {
               </span>
             </div>
 
-            {/* Judul */}
             <div className="min-w-0 flex-1">
               <h1 className="font-bold text-zinc-900 text-sm sm:text-xl tracking-tight leading-none truncate">
                 Kedai Antasena
@@ -404,15 +401,12 @@ function OrderContent() {
             </div>
           </div>
 
-          {/* Kanan: Mobile = WiFi saja, Desktop = WiFi + Pembayaran + Greeting */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            {/* Mobile: Hanya WiFi */}
             <div className="flex sm:hidden items-center gap-1 text-[10px] font-bold text-amber-800 bg-white px-2 py-1.5 rounded-lg border-2 border-amber-200 shadow-sm">
               <Wifi className="w-3 h-3" />
               <span className="font-mono text-[9px]">kedai2026</span>
             </div>
 
-            {/* Desktop: WiFi + Pembayaran Aman + Greeting */}
             <div className="hidden sm:flex items-center gap-2">
               <div className="flex items-center gap-2 text-xs font-bold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-xl border-2 border-amber-200">
                 <Wifi className="w-3.5 h-3.5" />
@@ -442,7 +436,6 @@ function OrderContent() {
       <main className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {step === "menu" && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Banner Carousel */}
             <div className="relative overflow-hidden rounded-3xl shadow-2xl h-[200px] sm:h-[240px] lg:h-[280px] border-2 border-amber-200/50">
               {bannerSlides.map((slide, index) => (
                 <div
@@ -483,7 +476,6 @@ function OrderContent() {
               </div>
             </div>
 
-            {/* Search Bar */}
             <div className="relative group max-w-2xl mx-auto">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-amber-600 group-focus-within:text-amber-700 transition-colors" />
               <input
@@ -495,7 +487,6 @@ function OrderContent() {
               />
             </div>
 
-            {/* Featured Section */}
             {category === "Semua" &&
               !searchQuery &&
               featuredMenus.length > 0 && (
@@ -551,7 +542,6 @@ function OrderContent() {
                 </div>
               )}
 
-            {/* Category Tabs - Unified */}
             <div className="sticky top-16 sm:top-20 z-30 bg-gradient-to-br from-amber-50/95 to-orange-50/95 backdrop-blur-lg py-2 -mx-3 px-3 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 lg:static lg:bg-transparent lg:backdrop-blur-none">
               <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
                 {categories.map((c) => (
@@ -570,7 +560,6 @@ function OrderContent() {
               </div>
             </div>
 
-            {/* Menu Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
               {filteredMenu.map((item) => (
                 <div

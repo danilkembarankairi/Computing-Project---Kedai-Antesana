@@ -11,36 +11,52 @@ import {
   TrendingUp,
   Home,
   Receipt,
+  Banknote,
   Coffee,
+  Flame,
+  Calendar,
 } from "lucide-react";
 
 export default function KasirPage() {
   const [orders, setOrders] = useState([]);
+  const [menus, setMenus] = useState([]); // ✅ STATE BARU: Untuk mencocokkan gambar
   const [filter, setFilter] = useState("active");
   const [loading, setLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Update waktu setiap menit
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
-  const fetchOrders = async () => {
+  // ✅ FETCH DATA: Ambil Orders DAN Menus sekaligus
+  const fetchData = async () => {
     try {
-      const res = await fetch("/api/orders");
-      const data = await res.json();
-      setOrders(data);
+      setLoading(true);
+      const [ordersRes, menuRes] = await Promise.all([
+        fetch("/api/orders"),
+        fetch("/api/menu"),
+      ]);
+
+      const ordersData = await ordersRes.json();
+      const menuData = await menuRes.json();
+
+      setOrders(ordersData);
+      setMenus(menuData);
     } catch (err) {
-      console.error("Gagal mengambil data pesanan:", err);
+      console.error("Gagal mengambil data:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 10000); // Polling setiap 10 detik
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -50,7 +66,7 @@ export default function KasirPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ orderStatus: status }),
     });
-    fetchOrders();
+    fetchData();
   };
 
   const updatePayment = async (id, status) => {
@@ -59,7 +75,7 @@ export default function KasirPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ paymentStatus: status }),
     });
-    fetchOrders();
+    fetchData();
   };
 
   const filteredOrders = orders.filter((o) => {
@@ -68,20 +84,73 @@ export default function KasirPage() {
     return o.orderStatus === filter;
   });
 
+  const targetDate = new Date(selectedDate);
+
+  const dailyOrders = orders.filter((o) => {
+    if (!o.createdAt) return false;
+    const d = new Date(o.createdAt);
+    return (
+      d.getDate() === targetDate.getDate() &&
+      d.getMonth() === targetDate.getMonth() &&
+      d.getFullYear() === targetDate.getFullYear()
+    );
+  });
+
+  const dailyRevenue = dailyOrders.reduce(
+    (sum, order) => sum + (order.totalAmount || 0),
+    0,
+  );
+
+  // ✅ AGREGASI MENU: Fallback ke data 'menus' jika imageUrl tidak ada di order
+  const menuSummary = {};
+  dailyOrders.forEach((order) => {
+    if (order.items) {
+      order.items.forEach((item) => {
+        // Cari gambar dari database menu jika item.imageUrl kosong
+        const matchedMenu = menus.find(
+          (m) => m.name === item.name || m._id === item.menuId,
+        );
+        const finalImageUrl = item.imageUrl || matchedMenu?.imageUrl || null;
+
+        if (menuSummary[item.name]) {
+          menuSummary[item.name].quantity += item.quantity;
+          menuSummary[item.name].revenue += item.price * item.quantity;
+        } else {
+          menuSummary[item.name] = {
+            quantity: item.quantity,
+            revenue: item.price * item.quantity,
+            price: item.price,
+            imageUrl: finalImageUrl, // ✅ Sekarang pasti ada gambarnya!
+          };
+        }
+      });
+    }
+  });
+
+  const topMenus = Object.entries(menuSummary)
+    .map(([name, data]) => ({ name, ...data }))
+    .sort((a, b) => b.quantity - a.quantity);
+
   const stats = {
     received: orders.filter((o) => o.orderStatus === "received").length,
     preparing: orders.filter((o) => o.orderStatus === "preparing").length,
     ready: orders.filter((o) => o.orderStatus === "ready").length,
-    totalToday: orders.length,
+    totalDaily: dailyOrders.length,
   };
+
+  const formattedDateTitle = targetDate.toLocaleDateString("id-ID", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-zinc-50 relative selection:bg-amber-200 selection:text-amber-900">
-      {/* Premium Header (Persis seperti Admin) */}
+      {/* Premium Header */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-gradient-to-r from-amber-100/90 via-orange-100/90 to-amber-100/90 border-b border-amber-200/60 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            {/* Tombol Kembali ke Beranda (Subtle) */}
             <Link
               href="/"
               className="p-2.5 text-zinc-400 hover:text-amber-700 hover:bg-amber-50 rounded-xl transition-all duration-200 active:scale-95"
@@ -90,7 +159,6 @@ export default function KasirPage() {
               <Home className="w-5 h-5" />
             </Link>
 
-            {/* Logo Kedai Antasena */}
             <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-amber-200 shadow-sm bg-white flex-shrink-0">
               <img
                 src="/kedai-antasena.jpeg"
@@ -116,18 +184,18 @@ export default function KasirPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Jam Digital */}
-            <div className="hidden sm:flex items-center gap-2 text-sm font-bold text-amber-800 bg-amber-50 px-4 py-2 rounded-xl border border-amber-200">
-              <Clock className="w-4 h-4" />
-              {currentTime.toLocaleTimeString("id-ID", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+            <div className="hidden sm:flex items-center gap-2 bg-white px-4 py-2 rounded-xl border-2 border-amber-200 shadow-sm">
+              <Calendar className="w-4 h-4 text-amber-600" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="bg-transparent outline-none text-sm font-bold text-zinc-700 cursor-pointer focus:text-amber-700"
+              />
             </div>
 
-            {/* Tombol Refresh (Persis seperti Admin) */}
             <button
-              onClick={fetchOrders}
+              onClick={fetchData}
               disabled={loading}
               className="p-3 bg-white border-2 border-amber-200 rounded-xl hover:bg-amber-50 hover:border-amber-300 active:scale-95 transition-all duration-200 shadow-md hover:shadow-lg group disabled:opacity-50"
               title="Segarkan Data"
@@ -140,11 +208,33 @@ export default function KasirPage() {
             </button>
           </div>
         </div>
+
+        <div className="sm:hidden px-4 pb-3 -mt-2">
+          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border-2 border-amber-200 shadow-sm w-full justify-center">
+            <Calendar className="w-4 h-4 text-amber-600" />
+            <span className="text-xs font-bold text-zinc-500">
+              Laporan Tanggal:
+            </span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-transparent outline-none text-sm font-bold text-zinc-700 cursor-pointer"
+            />
+          </div>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Grid (Gradient Colorful seperti Admin) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="h-8 w-1.5 bg-gradient-to-b from-amber-500 to-orange-600 rounded-full"></div>
+          <h2 className="text-xl font-bold text-zinc-800">
+            Laporan: {formattedDateTitle}
+          </h2>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
             title="Baru Masuk"
             value={stats.received}
@@ -166,16 +256,28 @@ export default function KasirPage() {
             color="emerald"
             gradient="from-emerald-500 to-emerald-600"
           />
-          <StatCard
-            title="Total Order"
-            value={stats.totalToday}
-            icon={TrendingUp}
-            color="amber"
-            gradient="from-amber-500 to-orange-600"
-          />
+          <div className="col-span-2 lg:col-span-1 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 shadow-xl shadow-emerald-500/20 text-white hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-emerald-100">
+                Pendapatan
+              </span>
+              <div className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <Banknote className="w-5 h-5" />
+              </div>
+            </div>
+            <p
+              className="text-xl lg:text-2xl font-black tracking-tight truncate"
+              title={`Rp ${dailyRevenue.toLocaleString("id-ID")}`}
+            >
+              Rp {dailyRevenue.toLocaleString("id-ID")}
+            </p>
+            <p className="text-xs text-emerald-100 mt-1">
+              {dailyOrders.length} Transaksi
+            </p>
+          </div>
         </div>
 
-        {/* Modern Filter Tabs (Persis seperti Admin) */}
+        {/* Filter Tabs */}
         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-6">
           {[
             { key: "active", label: "Pesanan Aktif", icon: Receipt },
@@ -190,18 +292,85 @@ export default function KasirPage() {
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 active:scale-95 ${
                   filter === f.key
                     ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30"
-                    : "text-zinc-600 hover:bg-amber-100 hover:text-amber-900"
+                    : "text-zinc-600 hover:bg-amber-100 hover:text-amber-900 bg-white border border-amber-200/60"
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className="w-4 h-4" />
                 <span className="hidden sm:inline">{f.label}</span>
               </button>
             );
           })}
         </div>
+
+        {/* ✅ SECTION: RINGKASAN MENU DENGAN GAMBAR ASLI */}
+        {topMenus.length > 0 ? (
+          <div className="mb-8 bg-white/80 backdrop-blur-xl rounded-2xl p-6 border-2 border-amber-200/60 shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-md">
+                <Flame className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="font-bold text-zinc-900 text-lg">
+                  Menu Terjual ({formattedDateTitle})
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  Total {topMenus.length} jenis menu terjual
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {topMenus.map((menu, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 p-3 bg-amber-50/50 rounded-xl border border-amber-100 hover:border-amber-300 transition-all"
+                >
+                  {/* ✅ GAMBAR ASLI MENU (Dengan Fallback yang Aman) */}
+                  <div className="w-12 h-12 bg-white rounded-lg overflow-hidden shadow-sm flex-shrink-0 border border-zinc-100">
+                    {menu.imageUrl ? (
+                      <img
+                        src={menu.imageUrl}
+                        alt={menu.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Jika link gambar rusak, tampilkan ikon kopi
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    {/* Fallback Icon (Muncul jika tidak ada imageUrl atau gambar error) */}
+                    <div
+                      className={`w-full h-full items-center justify-center bg-zinc-50 ${menu.imageUrl ? "hidden" : "flex"}`}
+                    >
+                      <Coffee className="w-6 h-6 text-zinc-400" />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-zinc-900 text-sm truncate">
+                      {menu.name}
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {menu.quantity} porsi • Rp{" "}
+                      {menu.revenue.toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mb-8 bg-white/80 backdrop-blur-xl rounded-2xl p-8 border-2 border-dashed border-amber-200 text-center">
+            <Calendar className="w-10 h-10 text-amber-300 mx-auto mb-2" />
+            <p className="text-zinc-500 font-medium">
+              Tidak ada data penjualan untuk tanggal ini.
+            </p>
+          </div>
+        )}
 
         {/* Orders Grid */}
         {loading && filteredOrders.length === 0 ? (
@@ -209,12 +378,12 @@ export default function KasirPage() {
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
               <RefreshCw className="w-8 h-8 text-amber-600 animate-spin" />
             </div>
-            <p className="text-zinc-600 font-medium">Memuat pesanan...</p>
+            <p className="text-zinc-600 font-medium">Memuat data...</p>
           </div>
         ) : filteredOrders.length === 0 ? (
-          <div className="text-center py-20 bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-dashed border-amber-200">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-amber-600" />
+          <div className="text-center py-20 bg-white/80 backdrop-blur-xl rounded-3xl border-2 border-amber-200/60 shadow-lg">
+            <div className="w-20 h-20 bg-zinc-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-10 h-10 text-zinc-300" />
             </div>
             <h3 className="text-lg font-bold text-zinc-900 mb-1">
               Tidak ada pesanan
@@ -240,27 +409,18 @@ export default function KasirPage() {
   );
 }
 
-// Komponen Stat Card (Persis seperti Admin Page)
 function StatCard({ title, value, icon: Icon, color, gradient }) {
-  const colorClasses = {
-    blue: "bg-blue-50 text-blue-700 border-blue-100",
-    orange: "bg-orange-50 text-orange-700 border-orange-100",
-    emerald: "bg-emerald-50 text-emerald-700 border-emerald-100",
-    amber: "bg-amber-50 text-amber-700 border-amber-100",
-  };
-
   return (
     <div
-      className={`bg-gradient-to-br ${gradient} rounded-2xl p-6 shadow-xl shadow-${color}-500/20 text-white hover:shadow-2xl hover:shadow-${color}-500/30 hover:-translate-y-1 transition-all duration-300`}
+      className={`bg-gradient-to-br ${gradient} rounded-2xl p-5 shadow-xl text-white hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 group`}
     >
       <div className="flex items-center justify-between mb-3">
-        <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-          <Icon className="w-6 h-6" />
-        </div>
         <span className="text-sm font-semibold text-white/90">{title}</span>
+        <div className="p-2.5 rounded-xl bg-white/20 backdrop-blur-sm group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+          <Icon className="w-5 h-5" />
+        </div>
       </div>
-      <p className="text-4xl font-bold">{value}</p>
-      <p className="text-sm text-white/80 mt-1">Pesanan hari ini</p>
+      <p className="text-3xl font-black tracking-tight">{value}</p>
     </div>
   );
 }

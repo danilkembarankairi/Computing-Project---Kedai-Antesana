@@ -22,7 +22,7 @@ const orderSchema = new mongoose.Schema(
     totalAmount: { type: Number, required: true },
     paymentMethod: {
       type: String,
-      enum: ["qris", "cashier"],
+      enum: ["qris", "cash"], // ✅ UBAH "cashier" MENJADI "cash" DI SINI
       required: true,
     },
     paymentStatus: {
